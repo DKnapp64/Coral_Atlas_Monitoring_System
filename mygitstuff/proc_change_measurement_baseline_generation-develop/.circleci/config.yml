@@ -1,0 +1,54 @@
+version: 2.1
+commands:
+  docker_login:
+    steps:
+      - run: echo "$ENCODED_GCR_PUSH_KEY" | base64 -d | docker login --username _json_key --password-stdin https://gcr.io
+executors:
+  circleci_executor:
+    docker:
+      - image: circleci/buildpack-deps:stretch
+jobs:
+  build:
+    executor: circleci_executor
+    steps:
+      - setup_remote_docker
+      - checkout
+      - run: 'export GITHUB_DEPLOY_KEY="$(echo $ENCODED_GITHUB_DEPLOY_KEY | base64 -d)" && make build'
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .archive/*.tar
+  test:
+    executor: circleci_executor
+    steps:
+      - setup_remote_docker
+      - checkout
+      - attach_workspace:
+          at: .
+      - run: make test
+  push:
+    executor: circleci_executor
+    steps:
+      - setup_remote_docker
+      - docker_login
+      - checkout
+      - attach_workspace:
+          at: .
+      - run: touch .archive/*.tar
+      - run: |
+          if [ "$CIRCLE_BRANCH" = "develop" ]; then
+            make push beta_tag_suffix=""
+          else
+            make push beta_tag_suffix="-$CIRCLE_BRANCH"
+          fi
+workflows:
+  version: 2
+  build_and_push:
+    jobs:
+      - build: {}
+      - test:
+          requires:
+            - build
+      - push:
+          requires:
+            - test

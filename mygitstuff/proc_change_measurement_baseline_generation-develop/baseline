@@ -1,0 +1,5 @@
+#!/bin/sh -e
+
+cd src
+pipenv run python app.py $@
+exit
